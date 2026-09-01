@@ -1,0 +1,14 @@
+pyinstaller --onedir --windowed --collect-all customtkinter FuffyTextEditor.py
+
+^^^^^ Command for turning it into an executable.
+
+Just make sure to use the other thing to make a sort of "Shortcut" for it!
+
+[Desktop Entry]
+Name=Fuffy Furry Text Editor
+Comment=A custom text editor built with Python and CustomTkinter
+Exec=Path To executable!
+Icon=Path to icon!
+Terminal=false
+Type=Application
+Categories=Utility;TextEditor;
