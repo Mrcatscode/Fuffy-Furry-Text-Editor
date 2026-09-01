@@ -269,7 +269,6 @@ def Main():
 
     Text_Editor.bind("<KeyRelease>", lambda e: [record_history(e, Text_Editor), update_stats(e, Text_Editor, Stats_Label)])
 
-    Text_Editor.bind("<KeyRelease>", lambda event: record_history(event, Text_Editor))
     Text_Editor.bind("<Control-z>", lambda event: undo_text(event, Text_Editor))
     Text_Editor.bind("<Control-Z>", lambda event: undo_text(event, Text_Editor))
 
