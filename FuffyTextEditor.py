@@ -19,7 +19,7 @@ TextFont = "JetBrains Mono"
 # region Global Functions
 
 def File_Picker():
-    File_Path = ctk.filedialog.askopenfilename(title="Select a File", filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")])
+    File_Path = ctk.filedialog.askopenfilename(title="Select a File", filetypes=[("Text Files", "*.txt"), ("All Files", "*")])
     return File_Path
 
 def Popup(Message, Button_Text):
