@@ -2,17 +2,52 @@ import customtkinter as ctk
 
 # region Setup
 
+# region Configs
 Config = {
     "Appearance": "dark",
-    "Text_Color": "#A500F2",
+    "Text_Color": "#9D00FF",
     "Background_Color": "#201020",
 }
+
+import os
+
+CONFIG_PATH = os.path.join("Settings", "config.txt")
+
+def Load_Configuration():
+    global Config
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    Config[key] = value
+    except FileNotFoundError:
+        os.makedirs("Settings", exist_ok=True)
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            for key, value in Config.items():
+                f.write(f"{key}={value}\n")
+    return Config
+
+Config = Load_Configuration()
+
+def Save_Configuration():
+    global Config
+    os.makedirs("Settings", exist_ok=True)
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        for key, value in Config.items():
+            f.write(f"{key}={value}\n")
+# endregion
 
 ctk.set_appearance_mode(Config["Appearance"])
 
 undo_history = []
 
 Current_File = None
+
+Is_Settings = False
+
+Is_Saving = False
 
 TextFont = "JetBrains Mono"
 
@@ -22,26 +57,63 @@ def File_Picker():
     File_Path = ctk.filedialog.askopenfilename(title="Select a File", filetypes=[("Text Files", "*.txt"), ("All Files", "*")])
     return File_Path
 
-def Popup(Message, Button_Text):
-    Popup_Window = ctk.CTkToplevel()
-    Popup_Window.title("🦊 ATTENTION 🦊")
-    Popup_Window.geometry("400x200")
+def Popup(Window, Popup_Message, Message=None, Button_Text=None, Option2=None, Option3=None, Entry_Option=None):
+    Popup_Message.place(relx=0.5, rely=0.5, anchor="center")
 
-    Message_Label = ctk.CTkLabel(Popup_Window, text=Message, font=("Arial", 20), wraplength=400, justify="center")
-    Message_Label.pack(fill="x", expand=True, pady=20)
+    Title_Bar = ctk.CTkFrame(Popup_Message, width=300, height=70, corner_radius=0, fg_color="#300530")
+    Title_Bar.pack(side="top", fill="x")
+
+    Title_Label = ctk.CTkLabel(Title_Bar, text="🦊 Attention 🦊", font=("Arial", 24), text_color="#A500F2", width=300, justify="center")
+    Title_Label.pack(side="left", padx=10, fill="x", expand=True)
+
+    Message_Label = ctk.CTkLabel(Popup_Message, text=Message, font=("Arial", 24), wraplength=400, justify="center")
+    Message_Label.pack(fill="x", expand=True, pady=20, padx=5)
+
+    if Entry_Option is not None:
+        Text_Entry = ctk.CTkEntry(Popup_Message, placeholder_text=Entry_Option, font=("Arial", 24))
+        Text_Entry.pack(fill="x", expand=True, pady=10, padx=5)
+
+        return Text_Entry
 
     if Button_Text is not None:
-        Close_Button = ctk.CTkButton(Popup_Window, text=Button_Text, width=100, height=50, font=("Arial", 28), corner_radius=0, fg_color="black", hover_color="gray", command=Popup_Window.destroy)
+        Close_Button = ctk.CTkButton(Popup_Message, text=Button_Text, width=300, height=50, font=("Arial", 28), corner_radius=0, fg_color="black", hover_color="gray", command=lambda: [Popup_Message.place_forget(), Message_Label.destroy(), Close_Button.destroy(), Title_Bar.destroy(), Title_Label.destroy()])
         Close_Button.pack(side="bottom", fill="x")
 
-def update_stats(event, Text_Editor, Status_Label):
+def Switch_Menus(Master, Text_Editor, Settings_Frame):
+    global Is_Settings
+    print("This is meant to switch to the 'settings' menu, where you can configure the rest of the app.")
+
+    if Is_Settings ==  False:
+        Master.configure(text="Back")
+        Text_Editor.pack_forget()
+        Settings_Frame.pack(side="bottom", fill="both", expand=True)
+    else:
+        Master.configure(text="Options")
+        Text_Editor.pack(side="bottom", fill="both", expand=True)
+        Settings_Frame.pack_forget()
+    Is_Settings = not Is_Settings
+
+def update_stats(event, Text_Editor, Status_Label, Saving=False, Window=None):
+    global Is_Saving
     content = Text_Editor.get("1.0", "end-1c")
-    # Split across any whitespace (spaces, tabs, newlines) to get real word tokens
     words = len(content.split()) if content.strip() else 0
     chars = len(content)
-    Status_Label.configure(text=f"File: {Current_File}  |  Words: {words} | Chars: {chars}")
 
-def Load_Text(Text_Editor, Stats_Label):
+    if Saving:
+        Is_Saving = True
+        Status_Label.configure(text=f"(Saving) File: {Current_File}  |  Words: {words} | Chars: {chars}")
+        if Window:
+            def clear_saving_flag():
+                global Is_Saving
+                Is_Saving = False
+                Status_Label.configure(text=f"File: {Current_File}  |  Words: {words} | Chars: {chars}")
+            Window.after(3000, clear_saving_flag)
+    else:
+        if Is_Saving:
+            return  # Don't let live KeyRelease updates clobber the "(Saving)" message early
+        Status_Label.configure(text=f"File: {Current_File}  |  Words: {words} | Chars: {chars}")
+
+def Load_Text(Window, Popup_Message, Text_Editor, Stats_Label):
     global Current_File
     File_Location = File_Picker()
     if File_Location:
@@ -51,15 +123,15 @@ def Load_Text(Text_Editor, Stats_Label):
                 Text_Editor.delete("1.0", "end")
                 Text_Editor.insert("1.0", Text_Content)
                 Current_File = File_Location
-                Popup("File Loaded Successfully!", "Okay :3")
-                update_stats(None, Text_Editor, Stats_Label)
+                Popup(Window, Popup_Message, "File Loaded Successfully!", "Okay :3")
+                update_stats(None, Text_Editor, Stats_Label, Window=Window)
                 return Current_File
         except Exception as e:
-            Popup(f"Failed to load file: {e}", "Okay :3")
+            Popup(Window, Popup_Message, f"Failed to load file: {e}", "Okay :3")
     else:
-        Popup("No file selected.", "Okay :3")
+        Popup(Window, Popup_Message, "No file selected.", "Okay :3")
 
-def Save_Text(event, Text_Editor, Stats_Label, Force_Save_As=False):
+def Save_Text(event, Text_Editor, Stats_Label, Popup_Message=None, Force_Save_As=False, Window=None):
     global Current_File
     Text_Content = Text_Editor.get("1.0", "end-1c") 
 
@@ -80,12 +152,13 @@ def Save_Text(event, Text_Editor, Stats_Label, Force_Save_As=False):
             with open(File_Location, "w", encoding="utf-8") as File:
                 File.write(Text_Content)
             Current_File = File_Location
-            update_stats(None, Text_Editor, Stats_Label)
-            Popup(f"File Saved Successfully to {Current_File}", "Okay :3")
+            update_stats(None, Text_Editor, Stats_Label, Saving=True, Window=Window)
         except Exception as e:
-            Popup(f"Error: {e}", "Okay :3")
+            if Popup_Message is not None:
+                Popup(Window, Popup_Message, f"Error: {e}", "Okay :3")
     else:
-        Popup("Oh, guess you didn't want to save then...", "Okay :3")
+        if Popup_Message is not None:
+            Popup(Window, Popup_Message, "Oh, guess you didn't want to save then...", "Okay :3")
 
 def select_all(event, Text_Editor):
     Text_Editor.tag_add("sel", "1.0", "end")
@@ -152,20 +225,20 @@ def undo_text(event, Text_Editor):
     return "break"
 
 def Safe_Exit(Window, Text_Editor, Stats_Label):
-    Popup_Window = ctk.CTkToplevel()
-    Popup_Window.title("🦊 ATTENTION 🦊")
-    Popup_Window.geometry("500x300")
+    Popup_Message = ctk.CTkToplevel()
+    Popup_Message.title("🦊 ATTENTION 🦊")
+    Popup_Message.geometry("500x300")
 
-    Message_Label = ctk.CTkLabel(Popup_Window, text="You should probably save if you haven't yet!", font=("Arial", 20), wraplength=400, justify="center")
+    Message_Label = ctk.CTkLabel(Popup_Message, text="You should probably save if you haven't yet!", font=("Arial", 20), wraplength=400, justify="center")
     Message_Label.pack(fill="x", expand=True, pady=20)
 
-    Close_Button = ctk.CTkButton(Popup_Window, text="No thanks, I probably saved already :3", width=100, height=50, font=("Arial", 24), corner_radius=0, fg_color="black", hover_color="gray", command=lambda: Popup_Window.destroy() or Window.destroy())
+    Close_Button = ctk.CTkButton(Popup_Message, text="No thanks, I probably saved already :3", width=100, height=50, font=("Arial", 24), corner_radius=0, fg_color="black", hover_color="gray", command=lambda: Popup_Message.destroy() or Window.destroy())
     Close_Button.pack(side="bottom", fill="x")
 
-    Close_Button2 = ctk.CTkButton(Popup_Window, text="Oh yeah, I will do that :3", width=100, height=50, font=("Arial", 24), corner_radius=0, fg_color="black", hover_color="gray", command=lambda: Popup_Window.destroy() or Save_Text(None, Text_Editor, Stats_Label) or Window.after(100, Window.destroy()))
+    Close_Button2 = ctk.CTkButton(Popup_Message, text="Oh yeah, I will do that :3", width=100, height=50, font=("Arial", 24), corner_radius=0, fg_color="black", hover_color="gray", command=lambda: Popup_Message.destroy() or Save_Text(None, Text_Editor, Stats_Label, Window=Window) or Window.after(100, Window.destroy()))
     Close_Button2.pack(side="bottom", fill="x")
 
-def Find_Text(event, Text_Editor):
+def Find_Text(event, Text_Editor, Popup_Message):
     Find_Window = ctk.CTkToplevel()
     Find_Window.title("🦊 Find 🦊")
     Find_Window.geometry("400x150")
@@ -199,7 +272,7 @@ def Find_Text(event, Text_Editor):
             Text_Editor.see(idx)
             Find_Window.destroy()
         else:
-            Popup("Phrase not found!", "Okay :3")
+            Popup(Find_Window, Popup_Message, "Phrase not found!", "Okay :3")
 
     Search_Button = ctk.CTkButton(Find_Window, text="Find", font=("Arial", 20), command=execute_search)
     Search_Button.pack(pady=5)
@@ -237,55 +310,98 @@ def Main():
     Window.title("Fuffy Furry Text Editor :3")
     Window.geometry("1200x800")
 
-    Options_Bar = ctk.CTkFrame(Window, width=200, height=50, corner_radius=0)
+    # --- TOP OPTIONS BAR ---
+    Options_Bar = ctk.CTkFrame(Window, width=200, height=40, corner_radius=0)
     Options_Bar.pack(side="top", fill="x")
 
-    Stats_Label = ctk.CTkLabel(Options_Bar,text="File: None  |  Words: 0 | Chars: 0",font=("Arial", 16),text_color="#A500F2")
-    Text_Editor = ctk.CTkTextbox(Window, width=1200, height=750, font=(TextFont, 28), wrap="word", corner_radius=0, fg_color=Config["Background_Color"], text_color=Config["Text_Color"])
+    # --- BOTTOM STATUS BAR ---
+    Bottom_Bar = ctk.CTkFrame(Window, width=200, height=25, corner_radius=0)
+    Bottom_Bar.pack(side="bottom", fill="x")
 
-    Save_Button = ctk.CTkButton(Options_Bar, text="Save", width=100, height=50, font=("Arial", 28), corner_radius=0, fg_color="black", hover_color="gray", command=lambda: Save_Text(None, Text_Editor, Stats_Label))
-    Save_Button.pack(side="left", fill="y")
+    Release_Label = ctk.CTkLabel(Bottom_Bar, text="Version: 1.0/2026 *Public Release*", font=("Arial", 16), text_color="#A500F2")
+    Release_Label.pack(side="left", padx=5)
 
-    Save_As_Button = ctk.CTkButton(Options_Bar, text="Save As", width=100, height=50, font=("Arial", 28), corner_radius=0, fg_color="black", hover_color="gray", command=lambda: Save_Text(None, Text_Editor, Stats_Label, Force_Save_As=True))
-    Save_As_Button.pack(side="left", fill="y", padx=5)
-
-    Load_Button = ctk.CTkButton(Options_Bar, text="Load", width=100, height=50, font=("Arial", 28), corner_radius=0, fg_color="black", hover_color="gray", command=lambda: Load_Text(Text_Editor, Stats_Label))
-    Load_Button.pack(side="left", fill="y")
-
-    Clear_Button = ctk.CTkButton(Options_Bar, text="Clear", width=100, height=50, font=("Arial", 28), corner_radius=0, fg_color="black", hover_color="gray", command=lambda: Clear_Text(Text_Editor, Stats_Label))
-
-    Clear_Button.pack(side="right", fill="y")
+    Stats_Label = ctk.CTkLabel(Bottom_Bar, text="File: None  |  Words: 0 | Chars: 0", font=("Arial", 16), text_color="#A500F2")
     Stats_Label.pack(side="right", padx=15)
 
+    # --- MAIN EDITOR AREA ---
+    Text_Editor = ctk.CTkTextbox(
+        Window, 
+        width=1200, 
+        height=750, 
+        font=(TextFont, 24), 
+        wrap="word", 
+        corner_radius=0, 
+        fg_color=Config["Background_Color"], 
+        text_color=Config["Text_Color"]
+    )
+
+    # --- SETTINGS MENU ---
+    Settings_Frame = ctk.CTkFrame(Window, width=200, height=750, corner_radius=0)
+
+    Options_Label = ctk.CTkLabel(Settings_Frame, text="Settings ;3", font=("Arial", 24), text_color="#A500F2")
+    Options_Label.pack(pady=20)
+
+    Settings_Background = ctk.CTkFrame(Settings_Frame, width=200, height=100, corner_radius=5, fg_color="#300530")
+    Settings_Background.pack(pady=10, padx=20, fill="both", expand=True)
+
+    Appearance_Setting = ctk.CTkSwitch(
+        Settings_Background, 
+        text="Light Mode", 
+        font=("Arial", 20), 
+        text_color="#A500F2", 
+        command=lambda: [
+            ctk.set_appearance_mode("light" if Appearance_Setting.get() else "dark"), 
+            Config.update({"Appearance": "light" if Appearance_Setting.get() else "dark"}), 
+            Save_Configuration()
+        ]
+    )
+    if Config["Appearance"] == "light":
+        Appearance_Setting.select()
+    else:
+        Appearance_Setting.deselect()
+    Appearance_Setting.pack(pady=10, padx=10, side="top", anchor="w")
+
+    # --- BUTTONS ---
+    Popup_Message = ctk.CTkFrame(Window, width=500, height=300, corner_radius=4)
+
+    Save_Button = ctk.CTkButton(Options_Bar, text="Save", width=100, height=50, font=("Arial", 24), corner_radius=0, fg_color="black", hover_color="gray", command=lambda: Save_Text(None, Text_Editor, Stats_Label, Popup_Message, Window=Window))
+    Save_Button.pack(side="left", fill="y")
+
+    Save_As_Button = ctk.CTkButton(Options_Bar, text="Save As", width=100, height=50, font=("Arial", 24), corner_radius=0, fg_color="black", hover_color="gray", command=lambda: Save_Text(None, Text_Editor, Stats_Label, Popup_Message, Force_Save_As=True, Window=Window))
+    Save_As_Button.pack(side="left", fill="y", padx=5)
+
+    Load_Button = ctk.CTkButton(Options_Bar, text="Load", width=100, height=50, font=("Arial", 24), corner_radius=0, fg_color="black", hover_color="gray", command=lambda: Load_Text(Window, Popup_Message, Text_Editor, Stats_Label))
+    Load_Button.pack(side="left", fill="y")
+
+    Clear_Button = ctk.CTkButton(Options_Bar, text="Clear", width=100, height=50, font=("Arial", 24), corner_radius=0, fg_color="black", hover_color="gray", command=lambda: Clear_Text(Text_Editor, Stats_Label))
+    Clear_Button.pack(side="right", fill="y")
+
+    Options_Button = ctk.CTkButton(Options_Bar, text="Options", width=100, height=50, font=("Arial", 24), corner_radius=0, fg_color="black", hover_color="gray", command=lambda: Switch_Menus(Options_Button, Text_Editor, Settings_Frame))
+    Options_Button.pack(side="right", fill="y", padx=5)
+
+    # Show text editor by default
     Text_Editor.pack(side="bottom", fill="both", expand=True)
 
-    # region bindings
-
+    # --- BINDINGS ---
     Window.protocol("WM_DELETE_WINDOW", lambda: Safe_Exit(Window, Text_Editor, Stats_Label))
 
     Text_Editor.bind("<Control-a>", lambda event: select_all(event, Text_Editor))
     Text_Editor.bind("<Control-A>", lambda event: select_all(event, Text_Editor))
-
     Text_Editor.bind("<Control-BackSpace>", lambda event: delete_word_back(event, Text_Editor))
-
-    Text_Editor.bind("<Control-s>", lambda event: Save_Text(event, Text_Editor, Stats_Label))
-    Text_Editor.bind("<Control-S>", lambda event: Save_Text(event, Text_Editor, Stats_Label))
-
+    Text_Editor.bind("<Control-s>", lambda event: Save_Text(event, Text_Editor, Stats_Label, Popup_Message, Window=Window))
+    Text_Editor.bind("<Control-S>", lambda event: Save_Text(event, Text_Editor, Stats_Label, Popup_Message, Window=Window))
     Text_Editor.bind("<KeyRelease>", lambda e: [record_history(e, Text_Editor), update_stats(e, Text_Editor, Stats_Label)])
-
     Text_Editor.bind("<Control-z>", lambda event: undo_text(event, Text_Editor))
     Text_Editor.bind("<Control-Z>", lambda event: undo_text(event, Text_Editor))
-
-    Text_Editor.bind("<Control-f>", lambda event: Find_Text(event, Text_Editor))
-    Text_Editor.bind("<Control-F>", lambda event: Find_Text(event, Text_Editor))
-
+    Text_Editor.bind("<Control-f>", lambda event: Find_Text(event, Text_Editor, Popup_Message))
+    Text_Editor.bind("<Control-F>", lambda event: Find_Text(event, Text_Editor, Popup_Message))
     Text_Editor.bind("<Control-equal>", lambda event: Adjust_Font_Size(Text_Editor, 2))
     Text_Editor.bind("<Control-minus>", lambda event: Adjust_Font_Size(Text_Editor, -2))
-
     Text_Editor.bind("<Control-plus>", lambda event: Adjust_Font_Size(Text_Editor, 5))
     Text_Editor.bind("<Control-underscore>", lambda event: Adjust_Font_Size(Text_Editor, -5))
-    # endregion
 
+    update_stats(None, Text_Editor, Stats_Label)
     Window.mainloop()
 
 Main()
